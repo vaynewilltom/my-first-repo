@@ -30,7 +30,6 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=['src/runtime_hooks/init_db.py'],
-    version_file='version_info.txt',
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
