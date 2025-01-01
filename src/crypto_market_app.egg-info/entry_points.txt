@@ -1,0 +1,2 @@
+[console_scripts]
+crypto-market-app = crypto_market_app.main:main

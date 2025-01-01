@@ -1,0 +1,90 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        architecture: 'x64'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        echo "Upgrading pip and installing build tools..."
+        python -m pip install --upgrade pip wheel setuptools
+        
+        echo "Installing project dependencies..."
+        pip install -r requirements.txt || (echo "Failed to install dependencies" && exit 1)
+        
+        echo "Installing PyInstaller..."
+        pip install pyinstaller || (echo "Failed to install PyInstaller" && exit 1)
+        
+        echo "Verifying installations..."
+        pip list
+        
+        echo "All dependencies installed successfully"
+      shell: cmd
+    - name: Create SQLite database directory
+      run: |
+        mkdir -p %USERPROFILE%\AppData\Local\CryptoMarketApp
+      shell: cmd
+    
+    - name: Build with PyInstaller
+      run: |
+        echo "Building executable with PyInstaller..."
+        pyinstaller crypto_market_app.spec
+        if not exist "dist\crypto_market_app.exe" (
+          echo "Build failed - executable not found"
+          exit 1
+        )
+      shell: cmd
+    
+    - name: Test executable
+      run: |
+        echo "Testing executable..."
+        dir dist
+        echo "Launching in test mode..."
+        start /wait dist\crypto_market_app.exe --test-mode
+        if %errorlevel% neq 0 (
+          echo "Test failed with error code %errorlevel%"
+          exit 1
+        )
+      shell: cmd
+    
+    - name: Create release package
+      run: |
+        echo "Creating release package..."
+        mkdir release
+        copy dist\crypto_market_app.exe release\
+        copy WINDOWS_README.txt release\
+        echo "Release package created successfully"
+      shell: cmd
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: CryptoMarketApp-Windows
+        path: release\*
+        if-no-files-found: error
+    
+    - name: Create GitHub Release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "Creating GitHub Release..."
+        gh release create v1.0.0 release\* --title "Crypto Market App v1.0.0" --notes "Windows 11 Desktop Application for Cryptocurrency Market Data"
+      shell: cmd

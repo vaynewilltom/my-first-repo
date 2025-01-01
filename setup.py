@@ -1,0 +1,45 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="crypto_market_app",
+    version="0.1.0",
+    author="Devin",
+    description="Cryptocurrency Market Data Viewer",
+    long_description=open('README.md').read(),
+    long_description_content_type="text/markdown",
+    packages=find_packages(where='src'),
+    package_dir={'': 'src'},
+    python_requires='>=3.8',
+    install_requires=[
+        'beautifulsoup4==4.12.3',
+        'certifi==2024.12.14',
+        'charset-normalizer==3.4.1',
+        'contourpy==1.3.1',
+        'cycler==0.12.1',
+        'fonttools==4.55.3',
+        'idna==3.10',
+        'kiwisolver==1.4.8',
+        'matplotlib==3.10.0',
+        'numpy==2.2.1',
+        'packaging==24.2',
+        'pillow==11.0.0',
+        'pyparsing==3.2.1',
+        'python-dateutil==2.9.0.post0',
+        'requests==2.32.3',
+        'six==1.17.0',
+        'soupsieve==2.6',
+        'urllib3==2.3.0',
+    ],
+    entry_points={
+        'console_scripts': [
+            'crypto-market-app=crypto_market_app.main:main',
+        ],
+    },
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: Microsoft :: Windows :: Windows 11",
+        "Environment :: X11 Applications :: Qt",
+        "Topic :: Office/Business :: Financial :: Investment",
+    ],
+)
