@@ -37,12 +37,7 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,)
 
-# Add matplotlib data files
-from PyInstaller.utils.hooks import collect_data_files
-datas = a.datas
-datas += collect_data_files('matplotlib')
-datas += collect_data_files('PIL')
-
+# Create the PYZ archive
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
@@ -50,7 +45,6 @@ exe = EXE(
     a.scripts,
     a.binaries,
     a.datas,
-    [],
     name='crypto_market_app',
     debug=False,
     bootloader_ignore_signals=False,
