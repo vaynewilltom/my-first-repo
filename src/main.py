@@ -24,11 +24,11 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from crypto_market_bot.utils.logger import setup_logger
-from crypto_market_bot.utils.config import load_config
-from crypto_market_bot.scraper.market_scraper import MarketScraper
-from crypto_market_bot.bot.telegram_bot import CryptoMarketBot
-from crypto_market_bot.storage.database import CryptoDatabase
+from .utils.logger import setup_logger
+from .utils.config import load_config
+from .scraper.market_scraper import MarketScraper
+from .bot.telegram_bot import CryptoMarketBot
+from .storage.database import CryptoDatabase
 
 logger = setup_logger(__name__)
 
@@ -126,14 +126,20 @@ def main():
     """主程序入口"""
     app = CryptoMarketApp()
     try:
-        # 使用asyncio.run来管理事件循环
-        asyncio.run(app.start())
+        # 创建新的事件循环
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # 运行应用
+        loop.run_until_complete(app.start())
     except KeyboardInterrupt:
         logger.info('收到信号，正在退出...')
     except Exception as e:
         logger.error(f'程序异常退出: {str(e)}')
         raise
     finally:
+        # 清理事件循环
+        loop.close()
         logger.info('程序已退出')
 
 if __name__ == '__main__':

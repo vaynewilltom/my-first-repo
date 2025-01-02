@@ -22,11 +22,15 @@ from ..utils.config import load_config
 logger = setup_logger(__name__)
 
 class MarketScraper:
-    def __init__(self):
-        """初始化市场数据抓取器"""
+    def __init__(self, db=None):
+        """初始化市场数据抓取器
+        
+        Args:
+            db (CryptoDatabase, optional): 数据库实例. 如果未提供，将创建新实例.
+        """
         self.url = 'https://coinmarketcap.com/exchanges/upbit/'
         self.config = load_config()
-        self.db = CryptoDatabase()
+        self.db = db if db is not None else CryptoDatabase()
         self.last_update_time = None
         self.previous_top_10 = set()
         self.scrape_interval = self.config['SCRAPE_INTERVAL']
