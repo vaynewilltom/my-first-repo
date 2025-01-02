@@ -1,21 +1,32 @@
 import pytest
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
 import asyncio
 from datetime import datetime, timedelta
 import time
 
 from .market_scraper import MarketScraper
+from ..storage.database import CryptoDatabase
 from ..utils.config import UPDATE_INTERVAL
 
 @pytest.fixture
-def scraper():
-    return MarketScraper()
+def mock_db():
+    """Create a mock database."""
+    db = Mock(spec=CryptoDatabase)
+    db.get_last_update_time.return_value = datetime.now()
+    return db
 
-def test_scraper_initialization(scraper):
+@pytest.fixture
+def scraper(mock_db):
+    """Create a scraper with mock database."""
+    return MarketScraper(mock_db)
+
+def test_scraper_initialization(scraper, mock_db):
     """Test scraper initialization"""
     assert scraper.url == "https://coinmarketcap.com/exchanges/upbit/"
     assert isinstance(scraper.headers, dict)
     assert 'User-Agent' in scraper.headers
+    assert scraper.db == mock_db
+    assert not scraper.is_running
 
 def test_get_top_cryptocurrencies_limit(scraper):
     """Test that scraper respects the limit parameter"""
@@ -44,14 +55,14 @@ def test_get_top_cryptocurrencies_limit(scraper):
         assert len(result_2) <= 2
 
 def test_scraper_data_format(scraper):
-    """Test that scraped data contains required fields"""
+    """Test that scraped data contains required fields with correct types"""
     with patch('requests.Session.get') as mock_get:
         mock_response = Mock()
         mock_response.text = """
         <div class="cmc-table__table-wrapper-outer">
             <table>
                 <tbody>
-                    <tr><td></td><td></td><td>Bitcoin</td><td>$50,000</td><td>100M</td></tr>
+                    <tr><td></td><td></td><td>Bitcoin</td><td>$50,000</td><td>25.5%</td></tr>
                 </tbody>
             </table>
         </div>
@@ -63,11 +74,15 @@ def test_scraper_data_format(scraper):
         assert len(result) == 1
         crypto = result[0]
         assert 'name' in crypto
+        assert 'rank' in crypto
         assert 'price' in crypto
-        assert 'volume' in crypto
+        assert 'volume_percentage' in crypto
         assert isinstance(crypto['name'], str)
-        assert isinstance(crypto['price'], str)
-        assert isinstance(crypto['volume'], str)
+        assert isinstance(crypto['rank'], int)
+        assert isinstance(crypto['price'], float)
+        assert isinstance(crypto['volume_percentage'], float)
+        assert crypto['price'] == 50000.0
+        assert crypto['volume_percentage'] == 25.5
 
 def test_scraper_error_handling(scraper):
     """Test scraper error handling"""
@@ -86,35 +101,34 @@ def test_scraper_error_handling(scraper):
         result = scraper.get_top_cryptocurrencies()
         assert result == []
 
-@pytest.mark.asyncio
-async def test_periodic_scraping():
-    """Test periodic scraping functionality"""
-    scraper = MarketScraper()
+def test_periodic_updates(scraper, mock_db):
+    """Test periodic update functionality"""
+    mock_data = [
+        {
+            'name': 'Bitcoin',
+            'rank': 1,
+            'price': 50000.0,
+            'volume_percentage': 25.5
+        }
+    ]
     
-    # Mock the scraping function
-    with patch.object(scraper, 'get_top_cryptocurrencies') as mock_scrape:
-        mock_scrape.return_value = [
-            {'name': 'Bitcoin', 'price': '$50,000', 'volume': '100M'}
-        ]
+    with patch.object(scraper, 'get_top_cryptocurrencies', return_value=mock_data):
+        # Start periodic updates
+        scraper.start_periodic_updates(interval_minutes=1)
+        assert scraper.is_running
+        assert scraper.scheduler.running
         
-        # Create a list to store scraping timestamps
-        scrape_times = []
+        # Wait briefly to allow one update
+        time.sleep(2)
         
-        async def mock_periodic_scrape():
-            for _ in range(3):  # Test 3 intervals
-                scrape_times.append(datetime.now())
-                result = scraper.get_top_cryptocurrencies()
-                assert len(result) > 0
-                await asyncio.sleep(UPDATE_INTERVAL / 20)  # Reduced sleep for testing
+        # Verify database interactions
+        mock_db.insert_crypto_data.assert_called_with(mock_data)
+        mock_db.cleanup_old_data.assert_called_with(hours=48)
         
-        # Run periodic scraping
-        await mock_periodic_scrape()
-        
-        # Verify timing between scrapes
-        for i in range(1, len(scrape_times)):
-            time_diff = scrape_times[i] - scrape_times[i-1]
-            # Allow for some timing variation
-            assert time_diff >= timedelta(seconds=UPDATE_INTERVAL/20 - 0.1)
+        # Stop updates
+        scraper.stop_periodic_updates()
+        assert not scraper.is_running
+        assert not scraper.scheduler.running
 
 def test_retry_mechanism(scraper):
     """Test that scraper implements retry mechanism"""
@@ -137,8 +151,8 @@ def test_data_consistency(scraper):
         <div class="cmc-table__table-wrapper-outer">
             <table>
                 <tbody>
-                    <tr><td></td><td></td><td>Bitcoin</td><td>$50,000</td><td>100M</td></tr>
-                    <tr><td></td><td></td><td>Ethereum</td><td>$3,000</td><td>50M</td></tr>
+                    <tr><td></td><td></td><td>Bitcoin</td><td>$50,000</td><td>25.5%</td></tr>
+                    <tr><td></td><td></td><td>Ethereum</td><td>$3,000</td><td>15.3%</td></tr>
                 </tbody>
             </table>
         </div>
@@ -151,5 +165,34 @@ def test_data_consistency(scraper):
             result = scraper.get_top_cryptocurrencies()
             assert len(result) == 2
             for crypto in result:
-                assert all(key in crypto for key in ['name', 'price', 'volume'])
-                assert all(isinstance(value, str) for value in crypto.values())
+                assert all(key in crypto for key in ['name', 'rank', 'price', 'volume_percentage'])
+                assert isinstance(crypto['name'], str)
+                assert isinstance(crypto['rank'], int)
+                assert isinstance(crypto['price'], float)
+                assert isinstance(crypto['volume_percentage'], float)
+
+def test_update_market_data(scraper, mock_db):
+    """Test market data update process"""
+    mock_data = [
+        {
+            'name': 'Bitcoin',
+            'rank': 1,
+            'price': 50000.0,
+            'volume_percentage': 25.5
+        }
+    ]
+    
+    with patch.object(scraper, 'get_top_cryptocurrencies', return_value=mock_data):
+        success = scraper.update_market_data()
+        assert success
+        mock_db.insert_crypto_data.assert_called_once_with(mock_data)
+        mock_db.cleanup_old_data.assert_called_once_with(hours=48)
+
+def test_get_last_update_time(scraper, mock_db):
+    """Test getting last update timestamp"""
+    expected_time = datetime.now()
+    mock_db.get_last_update_time.return_value = expected_time
+    
+    result = scraper.get_last_update_time()
+    assert result == expected_time
+    mock_db.get_last_update_time.assert_called_once()
