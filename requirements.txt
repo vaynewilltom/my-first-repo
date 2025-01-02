@@ -9,3 +9,6 @@ pytest==7.4.3
 pytest-asyncio==0.21.1
 plotly==5.18.0
 kaleido==0.2.1  # Required for plotly static image export
+SQLAlchemy==2.0.23
+psutil==5.9.6
+aiohttp==3.9.1
