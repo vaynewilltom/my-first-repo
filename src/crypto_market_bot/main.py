@@ -73,10 +73,38 @@ class CryptoMarketApp:
             logger.info('Telegram机器人和数据抓取任务已启动')
             
             # 等待任务完成或停止信号
-            done, pending = await asyncio.wait(
-                [scraper_task, bot_task, self.stop_event.wait()],
-                return_when=asyncio.FIRST_COMPLETED
-            )
+            tasks = [scraper_task, bot_task]
+            stop_task = asyncio.create_task(self.stop_event.wait())
+            tasks.append(stop_task)
+            
+            try:
+                done, pending = await asyncio.wait(
+                    tasks,
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+                
+                # 检查是否有任务异常退出
+                for task in done:
+                    try:
+                        await task
+                    except Exception as e:
+                        logger.error(f'任务执行出错: {str(e)}')
+                        raise
+                        
+            except asyncio.CancelledError:
+                logger.info('收到取消信号，正在关闭任务...')
+            except Exception as e:
+                logger.error(f'任务执行出错: {str(e)}')
+                raise
+            finally:
+                # 取消所有未完成的任务
+                for task in pending:
+                    if not task.done():
+                        task.cancel()
+                        try:
+                            await task
+                        except asyncio.CancelledError:
+                            pass
             
             # 取消剩余任务
             for task in pending:

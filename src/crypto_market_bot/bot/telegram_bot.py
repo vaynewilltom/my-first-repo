@@ -155,8 +155,8 @@ class CryptoMarketBot:
             # 启动更新器
             logger.debug('启动更新器...')
             try:
-                # 使用非阻塞方式启动更新器
-                self.application.updater.start_polling(
+                # 使用异步方式启动更新器
+                await self.application.updater.start_polling(
                     allowed_updates=Update.ALL_TYPES,
                     drop_pending_updates=True
                 )
