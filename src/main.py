@@ -13,10 +13,10 @@ cd ~ && cd ~/repos/my-first-repo && git pull
 import asyncio
 import logging
 from datetime import datetime
-from utils.logger import setup_logger
-from utils.config import load_config
-from scraper.market_scraper import MarketScraper
-from bot.telegram_bot import CryptoMarketBot
+from crypto_market_bot.utils.logger import setup_logger
+from crypto_market_bot.utils.config import load_config
+from crypto_market_bot.scraper.market_scraper import MarketScraper
+from crypto_market_bot.bot.telegram_bot import CryptoMarketBot
 
 logger = setup_logger(__name__)
 
@@ -34,11 +34,14 @@ class CryptoMarketApp:
             logger.info('正在启动加密货币市场机器人...')
             self.running = True
             
+            # 初始化组件
+            await self.bot.initialize()
+            
             # 启动数据抓取任务
-            scraper_task = asyncio.create_task(self.scraper.start())
+            scraper_task = await self.scraper.start()
             
             # 启动Telegram机器人
-            bot_task = asyncio.create_task(self.bot.run_async())
+            bot_task = self.bot.run_async()
             
             # 等待任务完成
             await asyncio.gather(scraper_task, bot_task)
@@ -47,6 +50,8 @@ class CryptoMarketApp:
             logger.error(f'程序运行出错: {str(e)}')
             await self.close()
             raise
+        finally:
+            self.running = False
             
     async def close(self):
         """关闭应用程序"""

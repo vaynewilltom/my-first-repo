@@ -82,16 +82,34 @@ class CryptoMarketBot:
             chart_text = '\n'.join([f'{data["timestamp"]}: {data["volume"]}%' for data in chart_data])
             await query.message.reply_text(f'{crypto_name}的24小时交易量走势：\n{chart_text}')
 
+    async def initialize(self):
+        """初始化机器人"""
+        if not self.application: 
+            self.application = Application.builder().token(self.token).build()
+            self.application.add_handler(CommandHandler('start', self.start))
+            self.application.add_handler(CommandHandler('status', self.status))
+            self.application.add_handler(CommandHandler('gettop10', self.get_top_10))
+            self.application.add_handler(CallbackQueryHandler(self.button_callback))
+
     async def run_async(self):
         """异步运行机器人"""
-        self.application = Application.builder().token(self.token).build()
-        self.application.add_handler(CommandHandler('start', self.start))
-        self.application.add_handler(CommandHandler('status', self.status))
-        self.application.add_handler(CommandHandler('gettop10', self.get_top_10))
-        self.application.add_handler(CallbackQueryHandler(self.button_callback))
-        await self.application.initialize()
-        await self.application.start()
-        await self.application.run_polling()
+        if not self.application:
+            await self.initialize()
+            
+        try:
+            await self.application.initialize()
+            await self.application.start()
+            await self.application.run_polling(allowed_updates=Update.ALL_TYPES)
+        except Exception as e:
+            logger.error(f'机器人运行出错: {str(e)}')
+            raise
+        finally:
+            try:
+                if self.application:
+                    await self.application.stop()
+                    await self.application.shutdown()
+            except Exception as e:
+                logger.error(f'关闭机器人时出错: {str(e)}')
 
 if __name__ == '__main__':
     bot = CryptoMarketBot()
