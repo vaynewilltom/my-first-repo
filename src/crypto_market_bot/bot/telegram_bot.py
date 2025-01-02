@@ -82,7 +82,9 @@ class CryptoMarketBot:
                 name_display = f'<font color="red">{name}</font>'
             else:
                 name_display = name
-            message += f'{i}. {name_display} - {crypto["volume"]}%\n'
+            # 使用两行显示每个加密货币，增加可读性
+            message += f'{i}. {name_display}\n'
+            message += f'    占比: {crypto["volume"]:>6.2f}%\n\n'
             keyboard.append([InlineKeyboardButton(
                 f'查看{name}走势',
                 callback_data=f'chart_{name}'
@@ -114,8 +116,9 @@ class CryptoMarketBot:
             # 按时间正序显示
             chart_data = sorted(chart_data, key=lambda x: x['timestamp'])
             
+            # 格式化历史数据显示，移除排名信息，使用更清晰的格式
             chart_text = '\n'.join([
-                f'时间: {data["timestamp"]} | 占比: {data["volume"]}% | 排名: {data["rank"] or "未知"}'
+                f'时间：{data["timestamp"]}  占比：{data["volume"]:>6.2f}%'
                 for data in chart_data
             ])
             await query.message.reply_text(

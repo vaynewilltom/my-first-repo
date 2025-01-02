@@ -152,13 +152,27 @@ class MarketScraper:
                         if not volume_elem:
                             continue
                             
-                        volume_text = volume_elem.get_text().strip().replace('%', '')
-                        # 提取数字部分
-                        volume_text = ''.join(c for c in volume_text if c.isdigit() or c == '.' or c == '-')
-                        try:
-                            volume = float(volume_text)
-                        except ValueError:
-                            logger.warning(f'无法解析交易量: {volume_text} - 跳过该条目')
+                        # 获取原始文本并解析交易量百分比
+                        raw_text = volume_elem.get_text().strip()
+                        
+                        # 检查是否包含百分号，确保我们在处理百分比数据
+                        if '%' in raw_text:
+                            # 移除百分号并解析数值部分
+                            numeric_part = raw_text.replace('%', '').strip()
+                            numeric_part = ''.join(c for c in numeric_part if c.isdigit() or c == '.')
+                            try:
+                                volume = float(numeric_part)
+                                # 验证百分比是否在合理范围内 (0-100)
+                                if 0 <= volume <= 100:
+                                    logger.debug(f'成功解析交易量百分比: {volume}%')
+                                else:
+                                    logger.warning(f'交易量百分比超出正常范围: {volume}% - 跳过该条目')
+                                    continue
+                            except ValueError:
+                                logger.warning(f'无法解析交易量百分比: {numeric_part} - 跳过该条目')
+                                continue
+                        else:
+                            logger.warning(f'未找到百分比符号: {raw_text} - 跳过该条目')
                             continue
                             
                         if volume > 0:  # 只添加有效的数据
