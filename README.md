@@ -1,2 +1,1 @@
-# my-first-repo
-这是我的第一个GitHub仓库
+# Cryptocurrency Market Bot\nA Telegram bot that provides real-time cryptocurrency market updates from CoinMarketCap's Upbit exchange.\n\n## Features\n- Periodic data scraping from CoinMarketCap Upbit\n- Telegram bot integration with command support\n- Automatic updates every 5 minutes\n- Top 10 cryptocurrencies by trading volume\n\n## Commands\n- /start - Start receiving updates\n- /stop - Stop receiving updates\n- /status - Check bot status\n\n## Requirements\n- Python 3.8+\n- Required packages in requirements.txt
