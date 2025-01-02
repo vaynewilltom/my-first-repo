@@ -151,15 +151,12 @@ class CryptoMarketBot:
             logger.info('开始运行Telegram机器人...')
             self._running = True
             
-            # 启动轮询
-            await self.application.updater.start_polling(
+            # 直接使用run_polling方法
+            await self.application.run_polling(
                 allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True
+                drop_pending_updates=True,
+                close_loop=False
             )
-            
-            # 等待机器人运行
-            while self._running:
-                await asyncio.sleep(1)
             
         except Exception as e: 
             logger.error(f'机器人运行出错: {str(e)}')

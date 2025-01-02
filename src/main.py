@@ -64,23 +64,10 @@ class CryptoMarketApp:
             
             # 启动机器人
             await self.bot.initialize()
-            bot_task = asyncio.create_task(self.bot.start_polling())
             
+            # 启动机器人轮询（不使用create_task）
             logger.info('Telegram机器人和数据抓取任务已启动')
-            
-            # 等待任务完成或停止信号
-            done, pending = await asyncio.wait(
-                [scraper_task, bot_task, self.stop_event.wait()],
-                return_when=asyncio.FIRST_COMPLETED
-            )
-            
-            # 取消剩余任务
-            for task in pending:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+            await self.bot.start_polling()
                 
         except asyncio.CancelledError:
             logger.info('收到取消信号，正在关闭任务...')
