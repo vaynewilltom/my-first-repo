@@ -16,10 +16,10 @@ import signal
 from datetime import datetime
 from telegram import Update
 from telegram.ext import Application
-from .utils.logger import setup_logger
-from .utils.config import load_config
-from .scraper.market_scraper import MarketScraper
-from .bot.telegram_bot import CryptoMarketBot
+from crypto_market_bot.utils.logger import setup_logger
+from crypto_market_bot.utils.config import load_config
+from crypto_market_bot.scraper.market_scraper import MarketScraper
+from crypto_market_bot.bot.telegram_bot import CryptoMarketBot
 
 logger = setup_logger(__name__)
 
@@ -38,32 +38,24 @@ class CryptoMarketApp:
             self.running = True
             
             # 设置信号处理
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             for sig in (signal.SIGTERM, signal.SIGINT):
                 loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(self.handle_signal(s)))
             
             # 初始化机器人和数据抓取器
-            app = await self.bot.initialize()
-            if not app:
-                raise RuntimeError("无法初始化Telegram机器人")
+            self.stop_event = asyncio.Event()
             
             # 启动数据抓取任务
             await self.scraper.start()
             
             # 启动机器人
-            await app.initialize()
-            await app.start()
-            await app.updater.start_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True
-            )
+            await self.bot.initialize()
+            await self.bot.start_polling()
             
             logger.info('Telegram机器人和数据抓取任务已启动')
             
             # 等待运行直到收到停止信号
-            stop_event = asyncio.Event()
-            self._stop_event = stop_event
-            await stop_event.wait()
+            await self.stop_event.wait()
             
         except asyncio.CancelledError:
             logger.info('收到取消信号，正在关闭任务...')
@@ -103,8 +95,8 @@ class CryptoMarketApp:
     async def handle_signal(self, sig):
         """处理系统信号"""
         logger.info(f'收到信号 {sig.name}，准备关闭...')
-        if hasattr(self, '_stop_event'):
-            self._stop_event.set()
+        if hasattr(self, 'stop_event'):
+            self.stop_event.set()
 
 def main():
     """主程序入口"""

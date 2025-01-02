@@ -15,10 +15,10 @@ import logging
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from ..scraper.market_scraper import MarketScraper
-from ..storage.database import CryptoDatabase
-from ..utils.logger import setup_logger
-from ..utils.config import load_config
+from crypto_market_bot.scraper.market_scraper import MarketScraper
+from crypto_market_bot.storage.database import CryptoDatabase
+from crypto_market_bot.utils.logger import setup_logger
+from crypto_market_bot.utils.config import load_config
 
 logger = setup_logger(__name__)
 
@@ -84,15 +84,17 @@ class CryptoMarketBot:
 
     async def initialize(self):
         """初始化机器人"""
+        if self.application:
+            return
+            
         try:
-            if self.application:
-                return self.application
-                
             # 构建应用程序
-            builder = Application.builder()
-            builder.token(self.token)
-            builder.concurrent_updates(True)
-            self.application = builder.build()
+            self.application = (
+                Application.builder()
+                .token(self.token)
+                .concurrent_updates(True)
+                .build()
+            )
             
             # 添加命令处理器
             self.application.add_handler(CommandHandler('start', self.start))
@@ -109,8 +111,12 @@ class CryptoMarketBot:
                 name='market_scraper'
             )
             
+            # 初始化应用程序
+            await self.application.initialize()
+            await self.application.start()
+            
             logger.info('Telegram机器人初始化成功')
-            return self.application
+            
         except Exception as e:
             logger.error(f'初始化Telegram机器人失败: {str(e)}')
             self.application = None
@@ -127,17 +133,29 @@ class CryptoMarketBot:
         """启动机器人轮询"""
         try:
             # 确保应用程序已初始化
-            app = await self.initialize()
-            if not app:
-                raise RuntimeError("无法初始化应用程序")
+            if not self.application:
+                await self.initialize()
+            
+            if not self.application:
+                raise RuntimeError("无法初始化Telegram机器人")
             
             logger.info('开始运行Telegram机器人...')
-            return app
+            
+            # 启动轮询
+            await self.application.updater.start_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True
+            )
+            
+            # 保持运行状态
+            await self.application.updater.running
             
         except Exception as e: 
             logger.error(f'机器人运行出错: {str(e)}')
             await self.stop()
             raise
+        finally:
+            logger.info('机器人轮询已停止')
 
     async def stop(self):
         """停止机器人"""
@@ -153,4 +171,4 @@ class CryptoMarketBot:
 
 if __name__ == '__main__':
     bot = CryptoMarketBot()
-    asyncio.run(bot.run_async())
+    asyncio.run(bot.start_polling())
