@@ -18,8 +18,8 @@ def load_config():
     
     config = {
         'TELEGRAM_BOT_TOKEN': os.getenv('TELEGRAM_BOT_TOKEN'),
-        'DB_PATH': os.getenv('DB_PATH', '/opt/crypto_market_bot/data/market_data.db'),
-        'LOG_PATH': os.getenv('LOG_PATH', '/var/log/crypto_market_bot/bot.log'),
+        'DB_PATH': os.path.expanduser(os.getenv('DB_PATH', '~/.crypto_market_bot/data/market_data.db')),
+        'LOG_PATH': os.path.expanduser(os.getenv('LOG_PATH', '~/.crypto_market_bot/logs/bot.log')),
         'SCRAPE_INTERVAL': int(os.getenv('SCRAPE_INTERVAL', '300')),
         'DEBUG': os.getenv('DEBUG', 'false').lower() == 'true',
         'UPDATE_INTERVAL': 300,  # 5 minutes in seconds

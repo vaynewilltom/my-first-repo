@@ -1,15 +1,13 @@
 [Unit]
-Description=Crypto Market Bot Service
+Description=Crypto Market Telegram Bot
 After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/repos/my-first-repo
-Environment=PYTHONPATH=/home/ubuntu/repos/my-first-repo
-ExecStartPre=/bin/mkdir -p /var/log/crypto_market_bot
-ExecStartPre=/bin/chown -R ubuntu:ubuntu /var/log/crypto_market_bot
-ExecStart=/usr/bin/python3 src/main.py
+User=%i
+WorkingDirectory=/home/%i/crypto_market_bot
+Environment=PYTHONPATH=/home/%i/crypto_market_bot
+ExecStart=/home/%i/.pyenv/versions/3.12.7/bin/python3 -m crypto_market_bot.main
 Restart=always
 RestartSec=10
 

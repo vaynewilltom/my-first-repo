@@ -24,11 +24,11 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from .utils.logger import setup_logger
-from .utils.config import load_config
-from .scraper.market_scraper import MarketScraper
-from .bot.telegram_bot import CryptoMarketBot
-from .storage.database import CryptoDatabase
+from crypto_market_bot.utils.logger import setup_logger
+from crypto_market_bot.utils.config import load_config
+from crypto_market_bot.scraper.market_scraper import MarketScraper
+from crypto_market_bot.bot.telegram_bot import CryptoMarketBot
+from crypto_market_bot.storage.database import CryptoDatabase
 
 logger = setup_logger(__name__)
 
