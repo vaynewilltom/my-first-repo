@@ -132,18 +132,7 @@ class CryptoMarketBot:
                 raise RuntimeError("无法初始化应用程序")
             
             logger.info('开始运行Telegram机器人...')
-            
-            # 启动应用程序
-            await app.initialize()
-            await app.start()
-            await app.updater.start_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True
-            )
-            
-            # 等待应用程序运行
-            while app.running:
-                await asyncio.sleep(1)
+            return app
             
         except Exception as e: 
             logger.error(f'机器人运行出错: {str(e)}')

@@ -12,11 +12,14 @@ cd ~ && cd ~/repos/my-first-repo && git pull
 
 import asyncio
 import logging
+import signal
 from datetime import datetime
-from crypto_market_bot.utils.logger import setup_logger
-from crypto_market_bot.utils.config import load_config
-from crypto_market_bot.scraper.market_scraper import MarketScraper
-from crypto_market_bot.bot.telegram_bot import CryptoMarketBot
+from telegram import Update
+from telegram.ext import Application
+from .utils.logger import setup_logger
+from .utils.config import load_config
+from .scraper.market_scraper import MarketScraper
+from .bot.telegram_bot import CryptoMarketBot
 
 logger = setup_logger(__name__)
 
@@ -34,9 +37,33 @@ class CryptoMarketApp:
             logger.info('正在启动加密货币市场机器人...')
             self.running = True
             
-            # 启动Telegram机器人（包含数据抓取任务）
-            await self.bot.start_polling()
+            # 设置信号处理
+            loop = asyncio.get_event_loop()
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(self.handle_signal(s)))
+            
+            # 初始化机器人和数据抓取器
+            app = await self.bot.initialize()
+            if not app:
+                raise RuntimeError("无法初始化Telegram机器人")
+            
+            # 启动数据抓取任务
+            await self.scraper.start()
+            
+            # 启动机器人
+            await app.initialize()
+            await app.start()
+            await app.updater.start_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True
+            )
+            
             logger.info('Telegram机器人和数据抓取任务已启动')
+            
+            # 等待运行直到收到停止信号
+            stop_event = asyncio.Event()
+            self._stop_event = stop_event
+            await stop_event.wait()
             
         except asyncio.CancelledError:
             logger.info('收到取消信号，正在关闭任务...')
@@ -57,15 +84,27 @@ class CryptoMarketApp:
         logger.info('正在关闭应用程序...')
         self.running = False
         
+        
         # 结束数据抓取
-        await self.scraper.close()
+        try:
+            await self.scraper.close()
+        except Exception as e:
+            logger.error(f'关闭数据抓取器时出错: {str(e)}')
         
         # 关闭Telegram机器人
-        if self.bot.application:
-            await self.bot.application.close()
-            await self.bot.application.cleanup()
+        try:
+            if self.bot.application:
+                await self.bot.stop()
+        except Exception as e:
+            logger.error(f'关闭Telegram机器人时出错: {str(e)}')
             
         logger.info('应用程序已关闭')
+        
+    async def handle_signal(self, sig):
+        """处理系统信号"""
+        logger.info(f'收到信号 {sig.name}，准备关闭...')
+        if hasattr(self, '_stop_event'):
+            self._stop_event.set()
 
 def main():
     """主程序入口"""
