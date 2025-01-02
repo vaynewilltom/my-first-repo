@@ -196,3 +196,67 @@ def test_get_last_update_time(scraper, mock_db):
     result = scraper.get_last_update_time()
     assert result == expected_time
     mock_db.get_last_update_time.assert_called_once()
+
+def test_detect_new_entries(scraper, mock_db):
+    """Test detection of new entries in top 10."""
+    # Mock current data
+    current_data = [
+        {'name': 'Bitcoin', 'rank': 1, 'price': 50000.0, 'volume_percentage': 25.5},
+        {'name': 'NewCoin', 'rank': 2, 'price': 1000.0, 'volume_percentage': 20.0},
+    ]
+    
+    # Mock previous data
+    mock_db.get_previous_top_n.return_value = [
+        {'name': 'Bitcoin', 'rank': 1, 'price': 49000.0, 'volume_percentage': 24.5},
+        {'name': 'OldCoin', 'rank': 2, 'price': 500.0, 'volume_percentage': 19.0},
+    ]
+    
+    # Test detection
+    new_entries = scraper.detect_new_entries(current_data, n=2)
+    assert len(new_entries) == 1
+    assert new_entries[0]['name'] == 'NewCoin'
+    mock_db.get_previous_top_n.assert_called_once_with(2)
+
+def test_format_new_entry_message(scraper):
+    """Test formatting of new entry notification message."""
+    entry = {
+        'name': 'TestCoin',
+        'rank': 5,
+        'price': 1234.56,
+        'volume_percentage': 15.7
+    }
+    
+    message = scraper.format_new_entry_message(entry)
+    assert '🚨 New Top 10 Entry!' in message
+    assert 'TestCoin has entered the top 10!' in message
+    assert 'Current Rank: #5' in message
+    assert 'Price: $1,234.56' in message
+    assert 'Volume: 15.7%' in message
+
+def test_notification_callback(scraper, mock_db):
+    """Test notification callback functionality."""
+    # Create mock callback
+    mock_callback = Mock()
+    scraper.set_notification_callback(mock_callback)
+    
+    # Mock current and previous data
+    current_data = [
+        {'name': 'Bitcoin', 'rank': 1, 'price': 50000.0, 'volume_percentage': 25.5},
+        {'name': 'NewCoin', 'rank': 2, 'price': 1000.0, 'volume_percentage': 20.0},
+    ]
+    
+    mock_db.get_previous_top_n.return_value = [
+        {'name': 'Bitcoin', 'rank': 1, 'price': 49000.0, 'volume_percentage': 24.5},
+        {'name': 'OldCoin', 'rank': 2, 'price': 500.0, 'volume_percentage': 19.0},
+    ]
+    
+    # Mock get_top_cryptocurrencies
+    with patch.object(scraper, 'get_top_cryptocurrencies', return_value=current_data):
+        # Update market data
+        success = scraper.update_market_data()
+        assert success
+        
+        # Verify callback was called with correct message
+        mock_callback.assert_called_once()
+        message = mock_callback.call_args[0][0]
+        assert 'NewCoin has entered the top 10!' in message

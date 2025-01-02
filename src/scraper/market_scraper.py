@@ -180,3 +180,86 @@ class MarketScraper:
     def get_last_update_time(self) -> Optional[datetime]:
         """Get the timestamp of the last successful update."""
         return self.db.get_last_update_time()
+        
+    def detect_new_entries(self, current_data: List[Dict], n: int = 10) -> List[Dict]:
+        """Detect cryptocurrencies that newly entered the top N list.
+        
+        Args:
+            current_data: List of current top cryptocurrencies
+            n: Number of top positions to monitor (default: 10)
+            
+        Returns:
+            List of dictionaries containing new entries with their data
+        """
+        # Get current top N
+        current_top_n = current_data[:n]
+        current_names = {crypto['name'] for crypto in current_top_n}
+        
+        # Get previous top N
+        previous_top_n = self.db.get_previous_top_n(n)
+        previous_names = {crypto['name'] for crypto in previous_top_n}
+        
+        # Find new entries
+        new_entry_names = current_names - previous_names
+        
+        # Get full data for new entries
+        new_entries = [
+            crypto for crypto in current_top_n
+            if crypto['name'] in new_entry_names
+        ]
+        
+        return new_entries
+        
+    def format_new_entry_message(self, entry: Dict) -> str:
+        """Format notification message for a new top N entry.
+        
+        Args:
+            entry: Dictionary containing cryptocurrency data
+            
+        Returns:
+            Formatted message string
+        """
+        return (
+            f"🚨 New Top 10 Entry!\n\n"
+            f"{entry['name']} has entered the top 10!\n"
+            f"Current Rank: #{entry['rank']}\n"
+            f"Price: ${entry['price']:,.2f}\n"
+            f"Volume: {entry['volume_percentage']:.1f}%"
+        )
+        
+    def update_market_data(self) -> bool:
+        """Scrape and store market data in the database.
+        
+        Returns:
+            bool: True if data was successfully updated, False otherwise
+        """
+        try:
+            crypto_data = self.get_top_cryptocurrencies()
+            if crypto_data:
+                # Check for new entries before updating database
+                new_entries = self.detect_new_entries(crypto_data)
+                
+                # Store data in database
+                self.db.insert_crypto_data(crypto_data)
+                self.db.cleanup_old_data(hours=48)  # Keep 48 hours of historical data
+                
+                # Return formatted messages for new entries
+                if new_entries and hasattr(self, 'notification_callback'):
+                    for entry in new_entries:
+                        message = self.format_new_entry_message(entry)
+                        self.notification_callback(message)
+                
+                logger.info("Market data updated successfully")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error updating market data: {e}")
+            return False
+            
+    def set_notification_callback(self, callback) -> None:
+        """Set callback function for new entry notifications.
+        
+        Args:
+            callback: Function that takes a message string as argument
+        """
+        self.notification_callback = callback

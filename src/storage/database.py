@@ -181,3 +181,50 @@ class CryptoDatabase:
         except sqlite3.Error as e:
             logger.error(f"Error getting last update time: {e}")
             raise
+
+    def get_previous_top_n(self, n: int = 10) -> List[Dict]:
+        """Get the previous top N cryptocurrencies by volume percentage.
+        
+        Args:
+            n: Number of top cryptocurrencies to retrieve (default: 10)
+            
+        Returns:
+            List of dictionaries containing cryptocurrency data from the previous update
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                # Get the latest timestamp
+                cursor.execute('SELECT MAX(timestamp) FROM crypto_data')
+                latest_timestamp = cursor.fetchone()[0]
+                
+                if not latest_timestamp:
+                    return []
+                
+                # Get the previous timestamp
+                cursor.execute('''
+                    SELECT MAX(timestamp) 
+                    FROM crypto_data 
+                    WHERE timestamp < ?
+                ''', (latest_timestamp,))
+                prev_timestamp = cursor.fetchone()[0]
+                
+                if not prev_timestamp:
+                    return []
+                
+                # Get the top N cryptocurrencies from the previous timestamp
+                cursor.execute('''
+                    SELECT name, rank, price, volume_percentage
+                    FROM crypto_data
+                    WHERE timestamp = ?
+                    ORDER BY volume_percentage DESC
+                    LIMIT ?
+                ''', (prev_timestamp, n))
+                
+                return [dict(row) for row in cursor.fetchall()]
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error getting previous top {n}: {e}")
+            return []
