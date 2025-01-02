@@ -23,21 +23,22 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.scraper.market_scraper import MarketScraper
-from src.storage.database import CryptoDatabase
-from src.utils.logger import setup_logger
-from src.utils.config import load_config
+from crypto_market_bot.scraper.market_scraper import MarketScraper
+from crypto_market_bot.storage.database import CryptoDatabase
+from crypto_market_bot.utils.logger import setup_logger
+from crypto_market_bot.utils.config import load_config
 
 logger = setup_logger(__name__)
 
 class CryptoMarketBot:
-    def __init__(self):
+    def __init__(self, token=None, scraper=None, db=None):
         """初始化Telegram机器人"""
         self.config = load_config()
-        self.token = self.config['TELEGRAM_BOT_TOKEN']
-        self.scraper = MarketScraper()
-        self.db = CryptoDatabase()
+        self.token = token or self.config['TELEGRAM_BOT_TOKEN']
+        self.scraper = scraper or MarketScraper()
+        self.db = db or CryptoDatabase()
         self.application = None
+        self._running = False
         
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理/start命令"""
@@ -148,6 +149,7 @@ class CryptoMarketBot:
                 raise RuntimeError("无法初始化Telegram机器人")
             
             logger.info('开始运行Telegram机器人...')
+            self._running = True
             
             # 启动轮询
             await self.application.updater.start_polling(
@@ -155,28 +157,28 @@ class CryptoMarketBot:
                 drop_pending_updates=True
             )
             
-            # 等待运行状态
-            try:
-                await self.application.updater.running
-            except Exception as e: 
-                logger.error(f'轮询过程中出错: {str(e)}')
-                raise
+            # 等待机器人运行
+            while self._running:
+                await asyncio.sleep(1)
             
         except Exception as e: 
             logger.error(f'机器人运行出错: {str(e)}')
             await self.stop()
             raise
         finally:
+            self._running = False
             logger.info('机器人轮询已停止')
 
     async def stop(self):
         """停止机器人"""
         try:
+            self._running = False
             if self.application:
                 if hasattr(self.application, 'updater') and self.application.updater.running:
                     await self.application.updater.stop()
                 await self.application.stop()
                 await self.application.shutdown()
+                self.application = None
                 logger.info('Telegram机器人已关闭')
         except Exception as e:
             logger.error(f'关闭机器人时出错: {str(e)}')

@@ -37,7 +37,7 @@ class CryptoMarketApp:
         """初始化应用程序"""
         self.config = load_config()
         self.running = False
-        self.db = CryptoDatabase(self.config['DB_PATH'])
+        self.db = CryptoDatabase()  # Database will load config internally
         self.scraper = MarketScraper(self.db)
         self.bot = CryptoMarketBot(
             token=self.config['TELEGRAM_BOT_TOKEN'],
@@ -126,20 +126,14 @@ def main():
     """主程序入口"""
     app = CryptoMarketApp()
     try:
-        # 创建新的事件循环
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        # 运行应用程序
-        loop.run_until_complete(app.start())
+        # 使用asyncio.run来管理事件循环
+        asyncio.run(app.start())
     except KeyboardInterrupt:
         logger.info('收到信号，正在退出...')
     except Exception as e:
         logger.error(f'程序异常退出: {str(e)}')
         raise
     finally:
-        # 清理事件循环
-        loop.close()
         logger.info('程序已退出')
 
 if __name__ == '__main__':
