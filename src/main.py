@@ -24,10 +24,11 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.utils.logger import setup_logger
-from src.utils.config import load_config
-from src.scraper.market_scraper import MarketScraper
-from src.bot.telegram_bot import CryptoMarketBot
+from crypto_market_bot.utils.logger import setup_logger
+from crypto_market_bot.utils.config import load_config
+from crypto_market_bot.scraper.market_scraper import MarketScraper
+from crypto_market_bot.bot.telegram_bot import CryptoMarketBot
+from crypto_market_bot.storage.database import CryptoDatabase
 
 logger = setup_logger(__name__)
 
@@ -35,9 +36,14 @@ class CryptoMarketApp:
     def __init__(self):
         """初始化应用程序"""
         self.config = load_config()
-        self.scraper = MarketScraper()
-        self.bot = CryptoMarketBot()
         self.running = False
+        self.db = CryptoDatabase(self.config['DB_PATH'])
+        self.scraper = MarketScraper(self.db)
+        self.bot = CryptoMarketBot(
+            token=self.config['TELEGRAM_BOT_TOKEN'],
+            scraper=self.scraper,
+            db=self.db
+        )
         
     async def start(self):
         """启动应用程序"""
@@ -48,29 +54,34 @@ class CryptoMarketApp:
             # 初始化机器人和数据抓取器
             self.stop_event = asyncio.Event()
             
-            # 启动数据抓取任务
-            await self.scraper.start()
-            
-            # 启动机器人
-            await self.bot.initialize()
-            
             # 设置信号处理
             loop = asyncio.get_running_loop()
             for sig in (signal.SIGTERM, signal.SIGINT):
                 loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(self.handle_signal(s)))
             
-            # 启动轮询
-            polling_task = asyncio.create_task(self.bot.start_polling())
+            # 启动数据抓取任务
+            scraper_task = asyncio.create_task(self.scraper.start())
+            
+            # 启动机器人
+            await self.bot.initialize()
+            bot_task = asyncio.create_task(self.bot.start_polling())
             
             logger.info('Telegram机器人和数据抓取任务已启动')
             
             # 等待任务完成或停止信号
-            await asyncio.gather(
-                polling_task,
-                self.stop_event.wait(),
-                return_exceptions=True
+            done, pending = await asyncio.wait(
+                [scraper_task, bot_task, self.stop_event.wait()],
+                return_when=asyncio.FIRST_COMPLETED
             )
             
+            # 取消剩余任务
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                
         except asyncio.CancelledError:
             logger.info('收到取消信号，正在关闭任务...')
         except Exception as e:
@@ -115,13 +126,20 @@ def main():
     """主程序入口"""
     app = CryptoMarketApp()
     try:
-        asyncio.run(app.start())
+        # 创建新的事件循环
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # 运行应用程序
+        loop.run_until_complete(app.start())
     except KeyboardInterrupt:
         logger.info('收到信号，正在退出...')
     except Exception as e:
         logger.error(f'程序异常退出: {str(e)}')
         raise
     finally:
+        # 清理事件循环
+        loop.close()
         logger.info('程序已退出')
 
 if __name__ == '__main__':
