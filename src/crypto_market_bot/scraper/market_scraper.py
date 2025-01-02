@@ -155,24 +155,58 @@ class MarketScraper:
                         # 获取原始文本并解析交易量百分比
                         raw_text = volume_elem.get_text().strip()
                         
-                        # 检查是否包含百分号，确保我们在处理百分比数据
-                        if '%' in raw_text:
-                            # 移除百分号并解析数值部分
-                            numeric_part = raw_text.replace('%', '').strip()
-                            numeric_part = ''.join(c for c in numeric_part if c.isdigit() or c == '.')
-                            try:
-                                volume = float(numeric_part)
-                                # 验证百分比是否在合理范围内 (0-100)
-                                if 0 <= volume <= 100:
-                                    logger.debug(f'成功解析交易量百分比: {volume}%')
-                                else:
-                                    logger.warning(f'交易量百分比超出正常范围: {volume}% - 跳过该条目')
+                        try:
+                            # 移除所有非数字字符（保留小数点和负号）
+                            numeric_part = ''.join(c for c in raw_text if c.isdigit() or c in '.-')
+                            volume = float(numeric_part)
+                            
+                            # 如果数值大于100，可能是交易量而不是百分比，需要转换
+                            if volume > 100:
+                                logger.debug(f'检测到大于100的数值: {volume}，尝试转换为百分比')
+                                try:
+                                    # 获取所有交易量数据
+                                    volumes = []
+                                    for v in soup.select('td div.volume-area p.volume'):
+                                        if v:
+                                            raw_vol = v.get_text().strip()
+                                            logger.debug(f'原始交易量数据: {raw_vol}')
+                                            try:
+                                                vol = float(''.join(c for c in raw_vol if c.isdigit() or c in '.-'))
+                                                if vol > 0:  # 只收集有效的正数值
+                                                    volumes.append(vol)
+                                            except ValueError as e:
+                                                logger.warning(f'解析交易量失败: {raw_vol} - {str(e)}')
+                                                continue
+                                    
+                                    if volumes:
+                                        total_volume = sum(volumes)
+                                        logger.debug(f'总交易量: {total_volume}')
+                                        if total_volume > 0:
+                                            old_volume = volume
+                                            volume = (volume / total_volume) * 100
+                                            logger.info(f'转换交易量: {old_volume} -> {volume}%')
+                                        else:
+                                            logger.warning('总交易量为0，无法计算百分比')
+                                            continue
+                                    else:
+                                        logger.warning('未找到有效的交易量数据')
+                                        continue
+                                except Exception as e:
+                                    logger.error(f'计算交易量百分比时出错: {str(e)}')
                                     continue
-                            except ValueError:
-                                logger.warning(f'无法解析交易量百分比: {numeric_part} - 跳过该条目')
-                                continue
-                        else:
-                            logger.warning(f'未找到百分比符号: {raw_text} - 跳过该条目')
+                            
+                            # 验证并规范化百分比值
+                            if volume > 100:
+                                logger.warning(f'百分比值过大 ({volume}%)，设置为100%')
+                                volume = 100.0
+                            elif volume < 0:
+                                logger.warning(f'百分比值为负 ({volume}%)，设置为0%')
+                                volume = 0.0
+                            
+                            # 记录最终的百分比值
+                            logger.debug(f'最终交易量百分比: {volume}%')
+                        except (ValueError, ZeroDivisionError) as e:
+                            logger.warning(f'无法解析交易量: {raw_text} - {str(e)} - 跳过该条目')
                             continue
                             
                         if volume > 0:  # 只添加有效的数据

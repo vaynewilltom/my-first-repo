@@ -68,12 +68,22 @@ class CryptoMarketBot:
             await update.message.reply_text('暂无数据，请稍后再试。')
             return
 
+        # 确保数据按交易量排序
+        crypto_data = sorted(crypto_data, key=lambda x: float(x['volume']), reverse=True)
+        
         # 获取当前排名
         current_ranks = {crypto["name"]: i+1 for i, crypto in enumerate(crypto_data)}
         
         keyboard = []
         message = '前10名加密货币：\n\n'
-        for i, crypto in enumerate(crypto_data[:10], 1):
+        
+        # 确保至少显示找到的所有币种（最多10个）
+        display_count = min(len(crypto_data), 10)
+        if display_count == 0:
+            await update.message.reply_text('未找到任何加密货币数据，请稍后再试。')
+            return
+            
+        for i, crypto in enumerate(crypto_data[:display_count], 1):
             name = crypto["name"]
             # 检查是否是新进入前10的币种（之前排名在11-20之间）
             prev_rank = self.previous_ranks.get(name, 0)
@@ -82,9 +92,12 @@ class CryptoMarketBot:
                 name_display = f'<font color="red">{name}</font>'
             else:
                 name_display = name
-            # 使用两行显示每个加密货币，增加可读性
+                
+            # 使用更清晰的格式显示每个加密货币
             message += f'{i}. {name_display}\n'
-            message += f'    占比: {crypto["volume"]:>6.2f}%\n\n'
+            message += f'    占比: {crypto["volume"]:>6.2f}%\n'
+            if i < display_count:  # 在最后一个条目后不添加额外换行
+                message += '\n'
             keyboard.append([InlineKeyboardButton(
                 f'查看{name}走势',
                 callback_data=f'chart_{name}'
