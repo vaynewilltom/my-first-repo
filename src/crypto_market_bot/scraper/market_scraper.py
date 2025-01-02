@@ -14,10 +14,14 @@ import asyncio
 import logging
 from datetime import datetime
 import aiohttp
+import pytz
 from bs4 import BeautifulSoup
 from ..storage.database import CryptoDatabase
 from ..utils.logger import setup_logger
 from ..utils.config import load_config
+
+# 设置北京时区
+BEIJING_TZ = pytz.timezone('Asia/Shanghai')
 
 logger = setup_logger(__name__)
 
@@ -162,7 +166,7 @@ class MarketScraper:
                                 'name': name,
                                 'price': price,
                                 'volume': volume,
-                                'timestamp': datetime.now().isoformat()
+                                'timestamp': datetime.now(BEIJING_TZ).strftime('%Y-%m-%d %H:%M:%S')
                             })
                             logger.debug(f'成功解析: {name} - 价格: {price}, 交易量: {volume}%')
                     except Exception as e:
@@ -170,7 +174,11 @@ class MarketScraper:
                         continue
                 
                 if crypto_data:
-                    logger.info(f'成功抓取 {len(crypto_data)} 条加密货币数据')
+                    # 按交易量排序并分配排名
+                    crypto_data = sorted(crypto_data, key=lambda x: float(x['volume']), reverse=True)
+                    for idx, entry in enumerate(crypto_data, 1):
+                        entry['rank'] = idx
+                    logger.info(f'成功抓取并排序 {len(crypto_data)} 条加密货币数据')
                 else:
                     logger.warning('未找到有效的加密货币数据')
                 return crypto_data
@@ -187,7 +195,7 @@ class MarketScraper:
             if crypto_data:
                 # 存储数据
                 self.db.save_market_data(crypto_data)
-                self.last_update_time = datetime.now()
+                self.last_update_time = datetime.now(BEIJING_TZ)
                 logger.info(f'成功保存{len(crypto_data)}条市场数据')
                 
                 # 检查前10名变化并记录

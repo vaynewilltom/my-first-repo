@@ -13,10 +13,14 @@ cd ~ && cd ~/repos/my-first-repo && git pull
 import asyncio
 import logging
 from datetime import datetime
+import pytz
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 import sys
 import os
+
+# 设置北京时区
+BEIJING_TZ = pytz.timezone('Asia/Shanghai')
 
 # Add the project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -39,6 +43,7 @@ class CryptoMarketBot:
         self.db = db or CryptoDatabase()
         self.application = None
         self._running = False
+        self.previous_ranks = {}
         
     async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理/start命令"""
@@ -57,24 +62,40 @@ class CryptoMarketBot:
 
     async def get_top_10(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理/gettop10命令"""
-        crypto_data = self.db.get_latest_data(limit=10)
+        # 获取前20名数据以检测新进入前10的币种
+        crypto_data = self.db.get_latest_data(limit=20)
         if not crypto_data:
             await update.message.reply_text('暂无数据，请稍后再试。')
             return
 
+        # 获取当前排名
+        current_ranks = {crypto["name"]: i+1 for i, crypto in enumerate(crypto_data)}
+        
         keyboard = []
         message = '前10名加密货币：\n\n'
-        for i, crypto in enumerate(crypto_data, 1):
-            message += f'{i}. {crypto["name"]}\n'
-            message += f'   价格: {crypto["price"]}\n'
-            message += f'   交易量: {crypto["volume"]}%\n\n'
+        for i, crypto in enumerate(crypto_data[:10], 1):
+            name = crypto["name"]
+            # 检查是否是新进入前10的币种（之前排名在11-20之间）
+            prev_rank = self.previous_ranks.get(name, 0)
+            if 10 < prev_rank <= 20:
+                # 标红显示新进入前10的币种
+                name_display = f'<font color="red">{name}</font>'
+            else:
+                name_display = name
+            message += f'{i}. {name_display} - {crypto["volume"]}%\n'
             keyboard.append([InlineKeyboardButton(
-                f'查看{crypto["name"]}走势',
-                callback_data=f'chart_{crypto["name"]}'
+                f'查看{name}走势',
+                callback_data=f'chart_{name}'
             )])
+            
+        # 更新排名记录
+        self.previous_ranks = current_ranks
+        
+        # 添加帮助按钮
+        keyboard.append([InlineKeyboardButton("帮助", callback_data="help_menu")])
 
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(message, reply_markup=reply_markup)
+        await update.message.reply_text(message, parse_mode='HTML', reply_markup=reply_markup)
 
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理按钮回调"""
@@ -87,9 +108,33 @@ class CryptoMarketBot:
             if not chart_data:
                 await query.message.reply_text(f'无法获取{crypto_name}的历史数据。')
                 return
-                
-            chart_text = '\n'.join([f'{data["timestamp"]}: {data["volume"]}%' for data in chart_data])
-            await query.message.reply_text(f'{crypto_name}的24小时交易量走势：\n{chart_text}')
+            
+            # 限制显示最新的30条记录
+            chart_data = sorted(chart_data, key=lambda x: x['timestamp'], reverse=True)[:30]
+            # 按时间正序显示
+            chart_data = sorted(chart_data, key=lambda x: x['timestamp'])
+            
+            chart_text = '\n'.join([
+                f'时间: {data["timestamp"]} | 占比: {data["volume"]}% | 排名: {data["rank"] or "未知"}'
+                for data in chart_data
+            ])
+            await query.message.reply_text(
+                f'{crypto_name}的交易量走势（最近30条记录）：\n\n{chart_text}',
+                parse_mode='HTML'
+            )
+        elif query.data == "help_menu":
+            help_text = (
+                "<b>可用命令：</b>\n\n"
+                "/start - 启动机器人\n"
+                "/gettop10 - 查看前10名加密货币\n"
+                "/status - 查看机器人运行状态\n\n"
+                "<b>功能说明：</b>\n"
+                "• 每5分钟自动更新数据\n"
+                "• 红色标记表示新进入前10的币种\n"
+                "• 点击币种可查看历史走势\n"
+                "• 历史数据显示最近30条记录"
+            )
+            await query.message.reply_text(help_text, parse_mode='HTML')
 
     async def initialize(self):
         """初始化机器人"""

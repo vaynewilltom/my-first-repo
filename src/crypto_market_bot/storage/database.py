@@ -12,9 +12,13 @@ cd ~ && cd ~/repos/my-first-repo && git pull
 
 import sqlite3
 import os
+import pytz
 from datetime import datetime, timedelta
 from ..utils.logger import setup_logger
 from ..utils.config import load_config
+
+# 设置北京时区
+BEIJING_TZ = pytz.timezone('Asia/Shanghai')
 
 logger = setup_logger(__name__)
 
@@ -31,18 +35,32 @@ class CryptoDatabase:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                # 创建市场数据表
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS market_data (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL,
-                        price TEXT NOT NULL,
-                        volume REAL NOT NULL,
-                        timestamp DATETIME NOT NULL
-                    )
-                ''')
-                # 创建索引以优化查询性能
-                cursor.execute('CREATE INDEX IF NOT EXISTS idx_name_timestamp ON market_data(name, timestamp)')
+                
+                # 检查表是否存在
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='market_data'")
+                table_exists = cursor.fetchone() is not None
+                
+                if not table_exists:
+                    # 创建新表
+                    cursor.execute('''
+                        CREATE TABLE market_data (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            name TEXT NOT NULL,
+                            price TEXT NOT NULL,
+                            volume REAL NOT NULL,
+                            timestamp DATETIME NOT NULL,
+                            rank INTEGER
+                        )
+                    ''')
+                    # 创建索引以优化查询性能
+                    cursor.execute('CREATE INDEX idx_name_timestamp ON market_data(name, timestamp)')
+                else:
+                    # 检查是否存在rank列
+                    cursor.execute("PRAGMA table_info(market_data)")
+                    columns = [col[1] for col in cursor.fetchall()]
+                    if 'rank' not in columns:
+                        cursor.execute('ALTER TABLE market_data ADD COLUMN rank INTEGER')
+                
                 conn.commit()
                 logger.info('数据库初始化成功')
         except Exception as e:
@@ -60,8 +78,8 @@ class CryptoDatabase:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.executemany(
-                    'INSERT INTO market_data (name, price, volume, timestamp) VALUES (?, ?, ?, ?)',
-                    [(d['name'], d['price'], d['volume'], d['timestamp']) for d in data_list]
+                    'INSERT INTO market_data (name, price, volume, timestamp, rank) VALUES (?, ?, ?, ?, ?)',
+                    [(d['name'], d['price'], d['volume'], d['timestamp'], d.get('rank')) for d in data_list]
                 )
                 conn.commit()
                 logger.info(f'成功保存{len(data_list)}条市场数据')
@@ -82,7 +100,7 @@ class CryptoDatabase:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT name, price, volume, timestamp
+                    SELECT name, price, volume, timestamp, rank
                     FROM market_data
                     WHERE timestamp = (
                         SELECT MAX(timestamp) FROM market_data
@@ -96,7 +114,8 @@ class CryptoDatabase:
                         'name': row[0],
                         'price': row[1],
                         'volume': row[2],
-                        'timestamp': row[3]
+                        'timestamp': row[3],
+                        'rank': row[4]
                     }
                     for row in rows
                 ]
@@ -117,15 +136,15 @@ class CryptoDatabase:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                time_threshold = datetime.now() - timedelta(hours=hours)
+                time_threshold = datetime.now(BEIJING_TZ) - timedelta(hours=hours)
                 cursor.execute('''
-                    SELECT timestamp, volume
+                    SELECT timestamp, volume, rank
                     FROM market_data
                     WHERE name = ? AND timestamp >= ?
                     ORDER BY timestamp ASC
                 ''', (crypto_name, time_threshold))
                 rows = cursor.fetchall()
-                return [{'timestamp': row[0], 'volume': row[1]} for row in rows]
+                return [{'timestamp': row[0], 'volume': row[1], 'rank': row[2]} for row in rows]
         except Exception as e:
             logger.error(f'获取历史数据失败: {str(e)}')
             return []
@@ -139,7 +158,7 @@ class CryptoDatabase:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                time_threshold = datetime.now() - timedelta(days=days)
+                time_threshold = datetime.now(BEIJING_TZ) - timedelta(days=days)
                 cursor.execute('DELETE FROM market_data WHERE timestamp < ?', (time_threshold,))
                 conn.commit()
                 logger.info(f'成功清理{cursor.rowcount}条旧数据')
