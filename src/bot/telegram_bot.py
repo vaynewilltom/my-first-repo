@@ -156,6 +156,10 @@ class CryptoMarketBot:
                 drop_pending_updates=True
             )
             
+            # 保持运行直到收到停止信号
+            while self._running:
+                await asyncio.sleep(1)
+            
         except Exception as e: 
             logger.error(f'机器人运行出错: {str(e)}')
             await self.stop()
