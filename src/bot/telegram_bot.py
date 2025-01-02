@@ -84,30 +84,46 @@ class CryptoMarketBot:
 
     async def initialize(self):
         """初始化机器人"""
-        if not self.application: 
-            self.application = Application.builder().token(self.token).build()
-            self.application.add_handler(CommandHandler('start', self.start))
-            self.application.add_handler(CommandHandler('status', self.status))
-            self.application.add_handler(CommandHandler('gettop10', self.get_top_10))
-            self.application.add_handler(CallbackQueryHandler(self.button_callback))
+        try:
+            if not self.application:
+                self.application = Application.builder().token(self.token).build()
+                self.application.add_handler(CommandHandler('start', self.start))
+                self.application.add_handler(CommandHandler('status', self.status))
+                self.application.add_handler(CommandHandler('gettop10', self.get_top_10))
+                self.application.add_handler(CallbackQueryHandler(self.button_callback))
+                logger.info('Telegram机器人初始化成功')
+        except Exception as e:
+            logger.error(f'初始化Telegram机器人失败: {str(e)}')
+            raise
 
     async def run_async(self):
         """异步运行机器人"""
-        if not self.application:
-            await self.initialize()
-            
         try:
-            await self.application.initialize()
-            await self.application.start()
-            await self.application.run_polling(allowed_updates=Update.ALL_TYPES)
-        except Exception as e:
+            if not self.application:
+                await self.initialize()
+            
+            logger.info('开始运行Telegram机器人...')
+            
+            # 使用Application的run_polling方法
+            await self.application.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                close_loop=False,
+                drop_pending_updates=True,
+                stop_signals=()  # 禁用信号处理
+            )
+            
+        except asyncio.CancelledError:
+            logger.info('收到取消信号，正在关闭Telegram机器人...')
+            raise
+        except Exception as e: 
             logger.error(f'机器人运行出错: {str(e)}')
             raise
         finally:
             try:
-                if self.application:
+                if self.application and self.application.running:
                     await self.application.stop()
                     await self.application.shutdown()
+                    logger.info('Telegram机器人已关闭')
             except Exception as e:
                 logger.error(f'关闭机器人时出错: {str(e)}')
 

@@ -86,8 +86,15 @@ class MarketScraper:
         try:
             logger.info('开始抓取市场数据...')
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
             }
+            
+            if not self.session or self.session.closed:
+                self.session = aiohttp.ClientSession()
             
             async with self.session.get(self.url, headers=headers) as response:
                 if response.status != 200:
@@ -99,26 +106,69 @@ class MarketScraper:
                 crypto_data = []
                 
                 # 解析前20名加密货币数据
-                for row in soup.select('table tbody tr')[:20]:
-                    columns = row.select('td')
-                    if len(columns) >= 3:
-                        name = columns[0].get_text().strip()
-                        price = columns[1].get_text().strip()
-                        try:
-                            # 解析交易对名称，只保留币种名称
+                rows = soup.select('div.sc-beb003d5-3 table tbody tr, table.cmc-table tbody tr')[:20]
+                logger.debug(f'找到 {len(rows)} 个交易对数据')
+                
+                for row in rows:
+                    try:
+                        # 尝试不同的选择器组合来获取数据
+                        name_elem = (
+                            row.select_one('td div.name-area p.name') or
+                            row.select_one('td:nth-child(3) a') or
+                            row.select_one('td:nth-child(2) a')
+                        )
+                        
+                        if not name_elem:
+                            continue
+                            
+                        name = name_elem.get_text().strip()
+                        if '/' in name:
                             name = name.split('/')[0].strip()
-                            # 解析交易量百分比
-                            volume_text = columns[2].get_text().strip().rstrip('%')
+                            
+                        # 解析价格
+                        price_elem = (
+                            row.select_one('td div.price-area p.price') or
+                            row.select_one('td:nth-child(4) span') or
+                            row.select_one('td:nth-child(3) span')
+                        )
+                        if not price_elem:
+                            continue
+                        price = price_elem.get_text().strip()
+                        
+                        # 解析交易量百分比
+                        volume_elem = (
+                            row.select_one('td div.volume-area p.volume') or
+                            row.select_one('td:nth-child(7) span') or
+                            row.select_one('td:nth-child(6) span')
+                        )
+                        if not volume_elem:
+                            continue
+                            
+                        volume_text = volume_elem.get_text().strip().replace('%', '')
+                        # 提取数字部分
+                        volume_text = ''.join(c for c in volume_text if c.isdigit() or c == '.' or c == '-')
+                        try:
                             volume = float(volume_text)
+                        except ValueError:
+                            logger.warning(f'无法解析交易量: {volume_text} - 跳过该条目')
+                            continue
+                            
+                        if volume > 0:  # 只添加有效的数据
                             crypto_data.append({
                                 'name': name,
                                 'price': price,
                                 'volume': volume,
                                 'timestamp': datetime.now().isoformat()
                             })
-                        except (ValueError, IndexError) as e:
-                            logger.warning(f'解析数据失败: {str(e)} - 跳过该条目')
+                            logger.debug(f'成功解析: {name} - 价格: {price}, 交易量: {volume}%')
+                    except Exception as e:
+                        logger.warning(f'解析数据失败: {name if "name" in locals() else "未知"} - {str(e)}')
+                        continue
                 
+                if crypto_data:
+                    logger.info(f'成功抓取 {len(crypto_data)} 条加密货币数据')
+                else:
+                    logger.warning('未找到有效的加密货币数据')
                 return crypto_data
                 
         except Exception as e:

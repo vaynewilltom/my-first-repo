@@ -36,15 +36,24 @@ class CryptoMarketApp:
             
             # 初始化组件
             await self.bot.initialize()
+            logger.info('机器人初始化完成')
             
             # 启动数据抓取任务
-            scraper_task = await self.scraper.start()
+            scraper_task = asyncio.create_task(self.scraper.start())
+            logger.info('数据抓取任务已启动')
             
             # 启动Telegram机器人
-            bot_task = self.bot.run_async()
+            bot_task = asyncio.create_task(self.bot.run_async())
+            logger.info('Telegram机器人任务已启动')
             
-            # 等待任务完成
-            await asyncio.gather(scraper_task, bot_task)
+            # 等待任务完成或者程序退出
+            try:
+                await asyncio.gather(scraper_task, bot_task)
+            except asyncio.CancelledError:
+                logger.info('收到取消信号，正在关闭任务...')
+                scraper_task.cancel()
+                bot_task.cancel()
+                await asyncio.gather(scraper_task, bot_task, return_exceptions=True)
             
         except Exception as e:
             logger.error(f'程序运行出错: {str(e)}')
@@ -52,6 +61,7 @@ class CryptoMarketApp:
             raise
         finally:
             self.running = False
+            logger.info('程序已停止运行')
             
     async def close(self):
         """关闭应用程序"""
