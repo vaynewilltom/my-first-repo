@@ -141,7 +141,9 @@ class CryptoMarketBot:
     async def start(self):
         """启动机器人"""
         try:
+            logger.debug('开始启动Telegram机器人...')
             if not self.application:
+                logger.debug('初始化Telegram应用程序...')
                 await self.initialize()
             
             if not self.application:
@@ -151,17 +153,27 @@ class CryptoMarketBot:
             self._running = True
             
             # 启动更新器
-            await self.application.updater.start_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True
-            )
-            
-            # 保持运行直到收到停止信号
-            while self._running:
-                await asyncio.sleep(1)
+            logger.debug('启动更新器...')
+            try:
+                # 使用非阻塞方式启动更新器
+                self.application.updater.start_polling(
+                    allowed_updates=Update.ALL_TYPES,
+                    drop_pending_updates=True
+                )
+                logger.debug('更新器启动成功')
+                
+                # 等待停止信号
+                while self._running:
+                    await asyncio.sleep(1)
+                    
+            except Exception as polling_error:
+                logger.error(f'启动更新器失败: {str(polling_error)}')
+                logger.exception('更新器错误详情:')
+                raise
             
         except Exception as e: 
             logger.error(f'机器人运行出错: {str(e)}')
+            logger.exception('详细错误信息:')
             await self.stop()
             raise
 
@@ -181,4 +193,4 @@ class CryptoMarketBot:
 
 if __name__ == '__main__':
     bot = CryptoMarketBot()
-    asyncio.run(bot.start_polling())
+    asyncio.run(bot.start())
