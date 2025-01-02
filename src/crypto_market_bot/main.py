@@ -130,12 +130,17 @@ def main():
     """主程序入口"""
     app = CryptoMarketApp()
     try:
+        # 设置更详细的日志级别
+        logging.getLogger('crypto_market_bot').setLevel(logging.DEBUG)
+        logger.debug('开始初始化应用程序...')
+        
         # 使用asyncio.run来管理事件循环
         asyncio.run(app.start())
     except KeyboardInterrupt:
         logger.info('收到信号，正在退出...')
     except Exception as e:
         logger.error(f'程序异常退出: {str(e)}')
+        logger.exception('详细错误信息:')
         raise
     finally:
         logger.info('程序已退出')
