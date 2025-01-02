@@ -16,10 +16,18 @@ import signal
 from datetime import datetime
 from telegram import Update
 from telegram.ext import Application
-from crypto_market_bot.utils.logger import setup_logger
-from crypto_market_bot.utils.config import load_config
-from crypto_market_bot.scraper.market_scraper import MarketScraper
-from crypto_market_bot.bot.telegram_bot import CryptoMarketBot
+import sys
+import os
+
+# Add the project root to Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from src.utils.logger import setup_logger
+from src.utils.config import load_config
+from src.scraper.market_scraper import MarketScraper
+from src.bot.telegram_bot import CryptoMarketBot
 
 logger = setup_logger(__name__)
 
@@ -37,11 +45,6 @@ class CryptoMarketApp:
             logger.info('正在启动加密货币市场机器人...')
             self.running = True
             
-            # 设置信号处理
-            loop = asyncio.get_running_loop()
-            for sig in (signal.SIGTERM, signal.SIGINT):
-                loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(self.handle_signal(s)))
-            
             # 初始化机器人和数据抓取器
             self.stop_event = asyncio.Event()
             
@@ -50,16 +53,26 @@ class CryptoMarketApp:
             
             # 启动机器人
             await self.bot.initialize()
-            await self.bot.start_polling()
+            
+            # 设置信号处理
+            loop = asyncio.get_running_loop()
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(self.handle_signal(s)))
+            
+            # 启动轮询
+            polling_task = asyncio.create_task(self.bot.start_polling())
             
             logger.info('Telegram机器人和数据抓取任务已启动')
             
-            # 等待运行直到收到停止信号
-            await self.stop_event.wait()
+            # 等待任务完成或停止信号
+            await asyncio.gather(
+                polling_task,
+                self.stop_event.wait(),
+                return_exceptions=True
+            )
             
         except asyncio.CancelledError:
             logger.info('收到取消信号，正在关闭任务...')
-            raise
         except Exception as e:
             logger.error(f'程序运行出错: {str(e)}')
             raise

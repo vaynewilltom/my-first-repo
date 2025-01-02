@@ -15,10 +15,18 @@ import logging
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from crypto_market_bot.scraper.market_scraper import MarketScraper
-from crypto_market_bot.storage.database import CryptoDatabase
-from crypto_market_bot.utils.logger import setup_logger
-from crypto_market_bot.utils.config import load_config
+import sys
+import os
+
+# Add the project root to Python path
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from src.scraper.market_scraper import MarketScraper
+from src.storage.database import CryptoDatabase
+from src.utils.logger import setup_logger
+from src.utils.config import load_config
 
 logger = setup_logger(__name__)
 
@@ -147,8 +155,12 @@ class CryptoMarketBot:
                 drop_pending_updates=True
             )
             
-            # 保持运行状态
-            await self.application.updater.running
+            # 等待运行状态
+            try:
+                await self.application.updater.running
+            except Exception as e: 
+                logger.error(f'轮询过程中出错: {str(e)}')
+                raise
             
         except Exception as e: 
             logger.error(f'机器人运行出错: {str(e)}')
