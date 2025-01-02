@@ -3,7 +3,8 @@ from setuptools import setup, find_packages
 setup(
     name='crypto_market_bot',
     version='1.0.0',
-    packages=find_packages(),
+    package_dir={'': 'src'},
+    packages=find_packages(where='src'),
     install_requires=[
         'python-telegram-bot[job-queue]==20.7',
         'requests==2.31.0',

@@ -15,9 +15,9 @@ import logging
 from datetime import datetime
 import aiohttp
 from bs4 import BeautifulSoup
-from crypto_market_bot.storage.database import CryptoDatabase
-from crypto_market_bot.utils.logger import setup_logger
-from crypto_market_bot.utils.config import load_config
+from ..storage.database import CryptoDatabase
+from ..utils.logger import setup_logger
+from ..utils.config import load_config
 
 logger = setup_logger(__name__)
 

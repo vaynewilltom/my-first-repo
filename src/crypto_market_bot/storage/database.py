@@ -24,9 +24,9 @@ class CryptoDatabase:
         config = load_config()
         self.db_path = config['DB_PATH']
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        self._init_db()
+        self.init_db()
 
-    def _init_db(self):
+    def init_db(self):
         """创建数据库表结构"""
         try:
             with sqlite3.connect(self.db_path) as conn:
