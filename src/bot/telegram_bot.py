@@ -85,47 +85,82 @@ class CryptoMarketBot:
     async def initialize(self):
         """初始化机器人"""
         try:
-            if not self.application:
-                self.application = Application.builder().token(self.token).build()
-                self.application.add_handler(CommandHandler('start', self.start))
-                self.application.add_handler(CommandHandler('status', self.status))
-                self.application.add_handler(CommandHandler('gettop10', self.get_top_10))
-                self.application.add_handler(CallbackQueryHandler(self.button_callback))
-                logger.info('Telegram机器人初始化成功')
+            if self.application:
+                return self.application
+                
+            # 构建应用程序
+            builder = Application.builder()
+            builder.token(self.token)
+            builder.concurrent_updates(True)
+            self.application = builder.build()
+            
+            # 添加命令处理器
+            self.application.add_handler(CommandHandler('start', self.start))
+            self.application.add_handler(CommandHandler('status', self.status))
+            self.application.add_handler(CommandHandler('gettop10', self.get_top_10))
+            self.application.add_handler(CallbackQueryHandler(self.button_callback))
+            
+            # 设置定期抓取任务
+            job_queue = self.application.job_queue
+            job_queue.run_repeating(
+                self.scrape_job,
+                interval=300,  # 5分钟
+                first=1,
+                name='market_scraper'
+            )
+            
+            logger.info('Telegram机器人初始化成功')
+            return self.application
         except Exception as e:
             logger.error(f'初始化Telegram机器人失败: {str(e)}')
+            self.application = None
             raise
 
-    async def run_async(self):
-        """异步运行机器人"""
+    async def scrape_job(self, context):
+        """定期抓取任务"""
         try:
-            if not self.application:
-                await self.initialize()
+            await self.scraper.scrape_and_process()
+        except Exception as e:
+            logger.error(f'抓取任务出错: {str(e)}')
+
+    async def start_polling(self):
+        """启动机器人轮询"""
+        try:
+            # 确保应用程序已初始化
+            app = await self.initialize()
+            if not app:
+                raise RuntimeError("无法初始化应用程序")
             
             logger.info('开始运行Telegram机器人...')
             
-            # 使用Application的run_polling方法
-            await self.application.run_polling(
+            # 启动应用程序
+            await app.initialize()
+            await app.start()
+            await app.updater.start_polling(
                 allowed_updates=Update.ALL_TYPES,
-                close_loop=False,
-                drop_pending_updates=True,
-                stop_signals=()  # 禁用信号处理
+                drop_pending_updates=True
             )
             
-        except asyncio.CancelledError:
-            logger.info('收到取消信号，正在关闭Telegram机器人...')
-            raise
+            # 等待应用程序运行
+            while app.running:
+                await asyncio.sleep(1)
+            
         except Exception as e: 
             logger.error(f'机器人运行出错: {str(e)}')
+            await self.stop()
             raise
-        finally:
-            try:
-                if self.application and self.application.running:
-                    await self.application.stop()
-                    await self.application.shutdown()
-                    logger.info('Telegram机器人已关闭')
-            except Exception as e:
-                logger.error(f'关闭机器人时出错: {str(e)}')
+
+    async def stop(self):
+        """停止机器人"""
+        try:
+            if self.application:
+                if hasattr(self.application, 'updater') and self.application.updater.running:
+                    await self.application.updater.stop()
+                await self.application.stop()
+                await self.application.shutdown()
+                logger.info('Telegram机器人已关闭')
+        except Exception as e:
+            logger.error(f'关闭机器人时出错: {str(e)}')
 
 if __name__ == '__main__':
     bot = CryptoMarketBot()
