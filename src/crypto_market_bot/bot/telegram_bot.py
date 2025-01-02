@@ -152,25 +152,10 @@ class CryptoMarketBot:
             logger.info('开始运行Telegram机器人...')
             self._running = True
             
-            # 启动更新器
-            logger.debug('启动更新器...')
-            try:
-                # 使用异步方式启动更新器
-                await self.application.updater.start_polling(
-                    allowed_updates=Update.ALL_TYPES,
-                    drop_pending_updates=True
-                )
-                logger.debug('更新器启动成功')
+            # 等待停止信号
+            while self._running:
+                await asyncio.sleep(1)
                 
-                # 等待停止信号
-                while self._running:
-                    await asyncio.sleep(1)
-                    
-            except Exception as polling_error:
-                logger.error(f'启动更新器失败: {str(polling_error)}')
-                logger.exception('更新器错误详情:')
-                raise
-            
         except Exception as e: 
             logger.error(f'机器人运行出错: {str(e)}')
             logger.exception('详细错误信息:')

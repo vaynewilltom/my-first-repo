@@ -78,6 +78,7 @@ class CryptoMarketApp:
             tasks.append(stop_task)
             
             try:
+                # 等待任意任务完成
                 done, pending = await asyncio.wait(
                     tasks,
                     return_when=asyncio.FIRST_COMPLETED
@@ -85,12 +86,13 @@ class CryptoMarketApp:
                 
                 # 检查是否有任务异常退出
                 for task in done:
-                    try:
-                        await task
-                    except Exception as e:
-                        logger.error(f'任务执行出错: {str(e)}')
-                        raise
-                        
+                    if task is not stop_task:  # 忽略停止事件任务
+                        try:
+                            await task
+                        except Exception as e:
+                            logger.error(f'任务执行出错: {str(e)}')
+                            raise
+                            
             except asyncio.CancelledError:
                 logger.info('收到取消信号，正在关闭任务...')
             except Exception as e:
@@ -98,21 +100,13 @@ class CryptoMarketApp:
                 raise
             finally:
                 # 取消所有未完成的任务
-                for task in pending:
+                for task in tasks:
                     if not task.done():
                         task.cancel()
                         try:
                             await task
                         except asyncio.CancelledError:
                             pass
-            
-            # 取消剩余任务
-            for task in pending:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
                 
         except asyncio.CancelledError:
             logger.info('收到取消信号，正在关闭任务...')
