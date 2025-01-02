@@ -40,7 +40,7 @@ class CryptoMarketBot:
         self.application = None
         self._running = False
         
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理/start命令"""
         await update.message.reply_text(
             '欢迎使用加密货币市场机器人！\n'
@@ -106,7 +106,7 @@ class CryptoMarketBot:
             )
             
             # 添加命令处理器
-            self.application.add_handler(CommandHandler('start', self.start))
+            self.application.add_handler(CommandHandler('start', self.cmd_start))
             self.application.add_handler(CommandHandler('status', self.status))
             self.application.add_handler(CommandHandler('gettop10', self.get_top_10))
             self.application.add_handler(CallbackQueryHandler(self.button_callback))
@@ -138,10 +138,9 @@ class CryptoMarketBot:
         except Exception as e:
             logger.error(f'抓取任务出错: {str(e)}')
 
-    async def start_polling(self):
-        """启动机器人轮询"""
+    async def start(self):
+        """启动机器人"""
         try:
-            # 确保应用程序已初始化
             if not self.application:
                 await self.initialize()
             
@@ -151,20 +150,16 @@ class CryptoMarketBot:
             logger.info('开始运行Telegram机器人...')
             self._running = True
             
-            # 直接使用run_polling方法
-            await self.application.run_polling(
+            # 启动更新器
+            await self.application.updater.start_polling(
                 allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True,
-                close_loop=False
+                drop_pending_updates=True
             )
             
         except Exception as e: 
             logger.error(f'机器人运行出错: {str(e)}')
             await self.stop()
             raise
-        finally:
-            self._running = False
-            logger.info('机器人轮询已停止')
 
     async def stop(self):
         """停止机器人"""

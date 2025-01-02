@@ -51,6 +51,10 @@ class CryptoMarketApp:
             logger.info('正在启动加密货币市场机器人...')
             self.running = True
             
+            # 初始化数据库
+            self.db.init_db()
+            logger.info('数据库初始化成功')
+            
             # 初始化机器人和数据抓取器
             self.stop_event = asyncio.Event()
             
@@ -62,12 +66,15 @@ class CryptoMarketApp:
             # 启动数据抓取任务
             scraper_task = asyncio.create_task(self.scraper.start())
             
-            # 启动机器人
+            # 初始化并启动机器人
             await self.bot.initialize()
+            await self.bot.start()
             
-            # 启动机器人轮询（不使用create_task）
             logger.info('Telegram机器人和数据抓取任务已启动')
-            await self.bot.start_polling()
+            
+            # 保持运行直到收到停止信号
+            while not self.stop_event.is_set():
+                await asyncio.sleep(1)
                 
         except asyncio.CancelledError:
             logger.info('收到取消信号，正在关闭任务...')
