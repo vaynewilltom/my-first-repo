@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
-import { BridgeData } from './types';
+import { BridgeData } from './main/types';
 
 declare global {
   interface Window {

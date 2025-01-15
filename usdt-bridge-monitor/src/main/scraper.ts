@@ -1,5 +1,5 @@
 import puppeteer, { ElementHandle } from 'puppeteer';
-import { BridgeData } from '../types';
+import { BridgeData } from './types';
 
 export async function fetchBridgeVolume(): Promise<BridgeData> {
   let browser;

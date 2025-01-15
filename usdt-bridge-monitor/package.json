@@ -1,7 +1,7 @@
 {
   "name": "usdt-bridge-monitor",
   "version": "1.0.0",
-  "main": "dist/main/main.js",
+  "main": "./dist/main/main.js",
   "private": true,
   "description": "USDT Bridge Monitor for tracking cross-chain bridge volume",
   "author": "Devin AI",
