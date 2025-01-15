@@ -6,13 +6,14 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "./dist/main",
+    "outDir": "./dist",
     "rootDir": "./src",
     "moduleResolution": "node"
   },
   "include": [
     "src/main/**/*",
     "src/preload.ts",
-    "src/types.ts"
+    "src/types.ts",
+    "src/main/scraper.ts"
   ]
 }
